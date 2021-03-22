@@ -1,0 +1,111 @@
+---
+title: "Figures 4A - 4E"
+output: html_notebook
+---
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+source("Main.R")
+
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+```
+
+```{r}
+  serObj <-readRDS(paste0(dataDir, "/RDS_Files/allSamplesCombined_selectedDonors.rds"))
+```
+
+```{r fig.height=6, fig.width=9}
+  Idents(serObj) <- serObj$seurat_clusters
+  serObj.markers <- FindAllMarkers(serObj, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  top10 <- serObj.markers %>% group_by(cluster) %>% top_n(n = 30, wt = avg_logFC)
+  top10M <- as.data.frame(top10)
+  top10M <- top10M[,c("gene", "cluster", "avg_logFC", "p_val_adj")]
+  top10M <- top10M[top10M$p_val_adj < 0.05,]
+  top10M <- top10M[order(top10M$cluster, -top10M$avg_logFC),]
+  
+  pdf(file = "./PDFFigures/Fig4A.pdf", width = 22, height = 18) 
+    DoHeatmap(serObj, features = top10$gene) 
+  dev.off()
+  
+```
+
+```{r}
+  pdf(file = "./PDFFigures/Fig4B.pdf", width = 7.5, height = 5) 
+    DimPlot(serObj, reduction = "umap", label = T, cols = c("red", "blue", "yellow", "lightskyblue", "darkgreen", "magenta") )
+  dev.off()
+```
+
+```{r}
+  allContigsTemp = combineAllClonesCOVID19()
+  allContigsTemp <- aminoAcidProperties(allContigsTemp, seq="JUNCTION", nt=TRUE, trim=TRUE, label="CDR3")
+  allContigsTemp$V_CALL <- sapply(allContigsTemp$V_CALL, function(x){k = strsplit(x,",")
+                                                                     return(k[[1]][1])})
+  
+  allContigsTemp$V_CALL <- sapply(allContigsTemp$V_CALL, function(x){k = strsplit(x,"-")
+                                                                     return(paste0(k[[1]][1], "-",k[[1]][2] ))})
+  tp <- allContigsTemp[,c("CELL", "C_CALL_General", "V_CALL", "CDR3_aa_length", "CDR3_aa_charge", "CDR3_aa_gravy")]
+  rownames(tp) <- tp$CELL
+  serObjS <- subset(serObj, cells=tp$CELL)
+  
+  
+  tp <- tp[colnames(serObjS@assays$RNA),]
+  serObjS$C_CALL_GENERAL <- tp$C_CALL_General
+  serObjS$C_CALL_GENERAL <- factor(serObjS$C_CALL_GENERAL, levels = c("IGHA", "IGHD", "IGHG", "IGHM"))
+  serObjS$V_CALL <- tp$V_CALL
+  serObjS$CDR3_aa_length <- tp$CDR3_aa_length
+```
+
+```{r}
+  pdf(file = "./PDFFigures/Fig4C.pdf", width = 7.5, height = 5) 
+    DimPlot(serObjS, reduction = "umap", group.by = "C_CALL_GENERAL", label = F, repel = T, cols = c("firebrick1", "blue", "springgreen4", "yellow2"), pt.size = 0.3)
+  dev.off()
+```
+
+```{r fig.height=5, fig.width=7}
+  selectedAntibodies <- read.csv(paste0(dataDir, "SelectedAntibodies_4.csv"), stringsAsFactors = F)
+  rownames(selectedAntibodies) <- selectedAntibodies$Cell_ID
+  
+  selectedCells <- list(
+                        HIGH_POTENT_NEUTRALIZER=selectedAntibodies[selectedAntibodies$AntibodyType=="Potent Neutralizer", "Cell_ID"],
+                        LOW_NEUTRALIZER=selectedAntibodies[selectedAntibodies$AntibodyType=="Low Neutralizer", "Cell_ID"],
+                        NON_NEUTRALIZING_BINDER=selectedAntibodies[selectedAntibodies$AntibodyType=="Non-Neutralizer Binder", "Cell_ID"],
+                        NON_NEUTRALIZING_NON_BINDER=selectedAntibodies[selectedAntibodies$AntibodyType=="Non-Neutralizer Non Binder", "Cell_ID"])
+
+  cellColors <- c("HIGH_POTENT_NEUTRALIZER"="red", "LOW_NEUTRALIZER" = "orange", "NON_NEUTRALIZING_BINDER"="darkgreen", "NON_NEUTRALIZING_NON_BINDER"="blue")
+
+
+  pdf(file = "./PDFFigures/Fig4D.pdf", width = 10, height = 5) 
+    DimPlot(serObjS, reduction = "umap", cells.highlight=selectedCells,
+                          sizes.highlight=2,
+                          cols.highlight = rev(cellColors[names(selectedCells)]), label = F)+
+                    theme(legend.position = "right")+ggtitle("Validated antibodies")
+  dev.off()
+```
+
+
+```{r}
+  h_vGene_cCall <- data.frame(CELL=colnames(serObjS@assays$RNA),
+                              V_CALL= serObjS$V_CALL,
+                              C_CALL_General=serObjS$C_CALL_GENERAL,
+                              CDR3_aa_length=serObjS$CDR3_aa_length)
+  
+  selectedCells <- h_vGene_cCall[h_vGene_cCall$V_CALL %in% c("IGHV3-53", "IGHV3-66") & h_vGene_cCall$CDR3_aa_length < 16, ]
+  rownames(selectedCells) <- selectedCells$CELL
+  selectedCells <- selectedCells[selectedCells$CELL %in% colnames(serObjS@assays$RNA), ]
+  
+  cellColors <- c("IGHV3-53"="red", "IGHV3-66"="blue")
+  
+  selectedCells <- list("IGHV3-53"=selectedCells[selectedCells$V_CALL=="IGHV3-53", "CELL"],
+                       "IGHV3-66"=selectedCells[selectedCells$V_CALL=="IGHV3-66", "CELL"]
+                       )
+  
+  pdf(file = "./PDFFigures/Fig4E.pdf", width = 7.5, height = 5) 
+    DimPlot(serObjS, reduction = "umap",
+                cells.highlight=selectedCells,
+                            sizes.highlight=1.5,
+                            cols.highlight = rev(cellColors[names(selectedCells)]), label = F)+
+                      theme(legend.position = "right")
+  
+  dev.off()
+```
+

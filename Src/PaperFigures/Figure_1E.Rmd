@@ -1,0 +1,153 @@
+---
+title: "Figure 1E"
+output: html_notebook
+---
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+source("Main.R")
+
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+```
+
+```{r}
+allContigs = combineAllClonesCOVID19()
+```
+
+
+```{r}
+controlBCells <- data.frame(fread(paste0(dataDir, "/SRP010970_vquest_airr.tsv"), sep = "\t",header = T, fill =T), stringsAsFactors = F)
+controlBCells <- controlBCells[controlBCells$locus %in% c("IGH", "IGK", "IGL"),]
+controlBCells$v_call <- sapply(controlBCells$v_call, function(x){strsplit(x, "Homsap ")[[1]][2]})
+controlBCells$v_call <- sapply(controlBCells$v_call, function(x){strsplit(x, "\\*")[[1]][1]})
+controlBCells$v_call <- sapply(controlBCells$v_call, function(x){k = strsplit(x,"-")
+                                                                   return(paste0(k[[1]][1], "-",k[[1]][2] ))})
+
+controlBCells_Heavy <- controlBCells[controlBCells$locus =="IGH",]
+controlBCells_Heavy$CDR3_aa_length <- nchar(controlBCells_Heavy$cdr3_aa)
+
+```
+
+```{r}
+selGene=c("IGHV3-53", "IGHV3-66" )
+selGeneSelected = selGene
+sel15 = FALSE
+if(sel15){
+  allContigs[allContigs$CDR3_aa_length < 16 & allContigs$V_CALL %in% selGene,"V_CALL"] = paste0(selGene,"_Selected")
+  controlBCells_Heavy[controlBCells_Heavy$CDR3_aa_length < 16 & controlBCells_Heavy$v_call %in% selGene,"v_call"] = paste0(selGene,"_Selected")
+  selGeneSelected = paste0(selGene,"_Selected")
+}
+
+
+controlTable <- data.frame(table(controlBCells_Heavy$v_call))
+controlTable$percent <- controlTable$Freq / sum(controlTable$Freq)
+
+allControl = sum(controlTable$Freq)
+selGeneControlSum= sum(controlTable[controlTable$Var1 %in% selGeneSelected, "Freq"])
+
+```
+
+```{r}
+h_vGene <- allContigs[,c("CELL", "donorID","SAMPLETYPE", "V_CALL")]
+h_vGene$V_CALL <- sapply(h_vGene$V_CALL, function(x){k = strsplit(x,"-")
+                                                                   return(paste0(k[[1]][1], "-",k[[1]][2] ))})
+
+rbdTable <- data.frame(table(h_vGene[h_vGene$SAMPLETYPE=="RBD","V_CALL"]))
+p2Table <- data.frame(table(h_vGene[h_vGene$SAMPLETYPE=="2P","V_CALL"]))
+
+
+h_vGene<- data.table(h_vGene)
+h_vGene[,sTypevcallNo := .N,by=c("donorID", "SAMPLETYPE","V_CALL")]
+h_vGene[,totalvcallNo := .N,by=c("donorID", "V_CALL")]
+h_vGene[,sTypeAllvcallNo := .N,by=c("donorID", "SAMPLETYPE")]
+h_vGene[,totalAllvcallNo := .N,by=c("donorID")]
+
+h_vGene <- data.frame(h_vGene)
+h_vGene$sTypevcallPercent <- h_vGene$sTypevcallNo / h_vGene$sTypeAllvcallNo
+h_vGene$totalvcallPercent <- h_vGene$totalvcallNo / h_vGene$totalAllvcallNo
+```
+
+
+```{r}
+VH3_53 <- unique(h_vGene[h_vGene$V_CALL %in% selGeneSelected,c("donorID", "SAMPLETYPE", "sTypevcallNo",
+                                                 "totalvcallNo", "sTypeAllvcallNo", "totalAllvcallNo",
+                                                 "sTypevcallPercent", "totalvcallPercent", "V_CALL")])
+
+VH3_53_s <- VH3_53[,c("donorID","SAMPLETYPE","sTypevcallNo", "sTypeAllvcallNo", "sTypevcallPercent", "V_CALL")]
+
+VH3_53_t <- VH3_53[,c("donorID","SAMPLETYPE","totalvcallNo", "totalAllvcallNo", "totalvcallPercent","V_CALL")]
+VH3_53_t$SAMPLETYPE <- "Total"
+
+colnames(VH3_53_t) <- c("donorID","SAMPLETYPE","sTypevcallNo", "sTypeAllvcallNo", "sTypevcallPercent","V_CALL")
+VH3_53_t <- unique(VH3_53_t)
+
+VH3_53_all <- rbind(VH3_53_s, VH3_53_t)
+
+controlPerc= controlTable[controlTable$Var1 %in% selGeneSelected,c("Var1","percent")]
+
+VH3_53_all <- rbind(VH3_53_all, c("CONTROL", "RBD", "100", "100", controlPerc[1,"percent"], as.character(controlPerc[1,"Var1"])))
+VH3_53_all <- rbind(VH3_53_all, c("CONTROL", "RBD", "100", "100", controlPerc[2,"percent"], as.character(controlPerc[2,"Var1"])))
+VH3_53_all <- rbind(VH3_53_all, c("CONTROL", "2P", "100", "100", controlPerc[1,"percent"], as.character(controlPerc[1,"Var1"])))
+VH3_53_all <- rbind(VH3_53_all, c("CONTROL", "2P", "100", "100", controlPerc[2,"percent"], as.character(controlPerc[2,"Var1"])))
+VH3_53_all <- rbind(VH3_53_all, c("CONTROL", "Total", "100", "100",controlPerc[1,"percent"], as.character(controlPerc[1,"Var1"])))
+VH3_53_all <- rbind(VH3_53_all, c("CONTROL", "Total", "100", "100",controlPerc[2,"percent"], as.character(controlPerc[2,"Var1"])))
+
+
+VH3_53_all$sTypevcallPercent <- as.numeric(VH3_53_all$sTypevcallPercent)
+VH3_53_all$sTypevcallNo <- as.numeric(VH3_53_all$sTypevcallNo)
+VH3_53_all$sTypeAllvcallNo <- as.numeric(VH3_53_all$sTypeAllvcallNo)
+
+VH3_53_all <- data.table(VH3_53_all)
+VH3_53_all[,sumsTypevcallNo := sum(sTypevcallNo),by=c("donorID", "SAMPLETYPE")]
+VH3_53_all[,sumsTypevcallPercent := sum(sTypevcallPercent),by=c("donorID", "SAMPLETYPE")]
+
+VH3_53_all <- data.frame(VH3_53_all)
+VH3_53_all_total <- unique(VH3_53_all[,c("donorID", "SAMPLETYPE", "sumsTypevcallNo", "sumsTypevcallPercent", "sTypeAllvcallNo")])
+VH3_53_all_total$donorID <- factor(VH3_53_all_total$donorID, levels = c("DON_1", "DON_2", "DON_4", "DON_5", "DON_6",  "DON_7",  "DON_9",  "DON_10",
+                                                "DON_13", "DON_14", "DON_18", "DON_19", "DON_20", "DON_21", "CONTROL"))
+
+```
+
+```{r}
+pvals=list()
+
+for(elem in  c("DON_1", "DON_2", "DON_4", "DON_5", "DON_6",  "DON_7",  "DON_9",  
+               "DON_10","DON_13", "DON_14", "DON_18", "DON_19", "DON_20", "DON_21")){
+  for(stype in  c("RBD", "2P", "Total")){
+    selGMy=c(VH3_53_all_total[VH3_53_all_total$donorID == elem & VH3_53_all_total$SAMPLETYPE == stype, "sumsTypevcallNo"],
+             selGeneControlSum)
+    
+    selGAll=c(VH3_53_all_total[VH3_53_all_total$donorID == elem & VH3_53_all_total$SAMPLETYPE == stype, "sTypeAllvcallNo"],
+             allControl)
+    k <- prop.test(selGMy, selGAll, alternative = "greater")
+    
+    pvals <- lappend(pvals, c(elem, stype, k$p.value, k$statistic))
+  }
+}
+
+pvals <- data.frame(do.call(rbind, pvals), stringsAsFactors = F)
+
+colnames(pvals) <- c("Donor", "SampleType", "P-value", "X-squared")
+pvals$`P-value` <- as.numeric(pvals$`P-value`)
+pvals$AdjustedPValues <- p.adjust(pvals$`P-value`, method = "BH")
+pvals$Significant <- FALSE
+pvals[pvals$AdjustedPValues < 0.1,"Significant"] <- TRUE
+```
+
+```{r}
+VH3_53_all_total$sumsTypevcallPercent <- VH3_53_all_total$sumsTypevcallPercent*100
+Fig1e <- ggplot(data=VH3_53_all_total, aes(x=donorID, y=sumsTypevcallPercent, fill=donorID)) +
+            facet_wrap(.~SAMPLETYPE, ncol=8)+
+            geom_bar(stat="identity", width=0.7, position=position_dodge()) +
+            #scale_fill_manual(values = c("darkred","darkgreen","darkblue"))+
+            theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position = "top")+
+            ylab(paste0("% of cells with ",paste(selGene, collapse = " or "),""))+xlab("")+ylim(0,20)
+
+
+pdf(file = "./PDFFigures/Fig1E.pdf", width = 8,  height = 4) 
+plot(Fig1e)
+dev.off()
+
+
+```
+
