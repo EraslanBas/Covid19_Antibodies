@@ -1,0 +1,88 @@
+---
+title: "Supplementary Figures 1M - 1O"
+output: html_notebook
+---
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+source("Main.R")
+
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+```
+
+
+```{r}
+allContigs = combineAllClonesCOVID19()
+
+```
+
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+getCloneRepresentativeCells <- function(allContigsTemp){
+  allContigsTemp$donorClone <- paste0(allContigsTemp$donorID, "_", allContigsTemp$CLONE)
+
+  allContigsTemp <- split(allContigsTemp, f = allContigsTemp$donorClone)
+  
+  allContigsTemp <- lapply(allContigsTemp, function(x){
+      k <- rownames(unique(x[,c("SAMPLENAME","C_CALL_General","C_CALL_LIGHT_General")]))
+      return(x[k,])
+  })
+  
+  allContigsTemp <- do.call(rbind, allContigsTemp)
+  
+  return(allContigsTemp)
+}
+
+allContigsTemp <- getCloneRepresentativeCells(allContigs)
+```
+
+```{r}
+controlBCells <- data.frame(fread(paste0(dataDir, "/SRP010970_vquest_airr.tsv"), sep = "\t",header = T, fill =T), stringsAsFactors = F)
+controlBCells <- controlBCells[controlBCells$locus %in% c("IGH", "IGK", "IGL"),]
+controlBCells_Heavy <- controlBCells[controlBCells$locus =="IGH",]
+
+```
+
+```{r}
+aaProbsControl <- aminoAcidProperties(controlBCells_Heavy, seq="cdr3", nt=TRUE, trim=TRUE, label="CDR3")
+aaProbsControl <- aaProbsControl[,c("CDR3_aa_length", "CDR3_aa_charge", "CDR3_aa_gravy")]
+aaProbsControl <- aaProbsControl[!is.na(aaProbsControl$CDR3_aa_length),]
+aaProbsControl$C_CALL_General <- "Control"
+aaProbsControlMelted <- melt(aaProbsControl, id.vars = "C_CALL_General")
+```
+
+```{r}
+allContigsTemp <- aminoAcidProperties(allContigsTemp, seq="JUNCTION", nt=TRUE, trim=TRUE, label="CDR3")
+```
+
+```{r}
+allContigsTemp_CDR3 <- allContigsTemp[, c("C_CALL_General","CDR3_aa_length","CDR3_aa_charge", "CDR3_aa_gravy")]
+allContigsTemp_CDR3 <- melt(allContigsTemp_CDR3, id.vars = "C_CALL_General")
+
+allContigsTemp_CDR3 <- rbind(allContigsTemp_CDR3, aaProbsControlMelted)
+allContigsTemp_CDR3$variable <- as.character(allContigsTemp_CDR3$variable)
+allContigsTemp_CDR3[allContigsTemp_CDR3$variable == "CDR3_aa_gravy", "variable"] <- "CDR3_aa_hydrophobicity"
+```
+
+```{r fig.height=2.5, fig.width=6}
+allContigsTemp_CDR3$variable <- factor(allContigsTemp_CDR3$variable,
+                                       levels = c("CDR3_aa_length","CDR3_aa_charge", "CDR3_aa_hydrophobicity"))
+allContigsTemp_CDR3$C_CALL_General <- factor(allContigsTemp_CDR3$C_CALL_General, levels = (c("Control", "IGHD", "IGHM", "IGHA", "IGHG")))
+
+
+cList = list(c("IGHM", "IGHD"), c("Control", "IGHM"), c("Control", "IGHA"), c("Control", "IGHG"))
+
+pdf(file = "./PDFFigures/Supplementary_Figure_1M_IO.pdf", width = 15, height = 5) 
+  ggplot(data=allContigsTemp_CDR3, aes(x=C_CALL_General, y=value, fill=C_CALL_General)) +
+      geom_boxplot(position=position_dodge())+ylab("Value")+
+     facet_wrap(~variable, scales = "free")+
+     xlab("")+
+     stat_compare_means(method="t.test",
+                                  comparisons = cList,paired=F,
+                                  color="red",
+                                  aes(label = ..p.signif.., label.y = c(quantile(value)[4], quantile(value)[4]+5, quantile(value)[4]+10, quantile(value)[4]+15 )))+
+    #stat_summary(fun.data = n_fun, geom = "text", size=3)
+    scale_fill_manual(values=rev(c("blue","springgreen3", "plum4", "pink", "#E69F00")))+theme(axis.text = element_text(size=15))
+dev.off()
+
+```

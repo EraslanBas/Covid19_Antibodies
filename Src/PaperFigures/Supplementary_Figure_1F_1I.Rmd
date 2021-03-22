@@ -1,0 +1,182 @@
+---
+title: "Supplementary Figures 1G - 1O"
+output: html_notebook
+---
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+source("Main.R")
+
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+```
+
+```{r}
+ allContigs = combineAllClonesCOVID19()
+
+```
+
+```{r}
+  controlBCells <- data.frame(fread(paste0(dataDir, "/SRP010970_vquest_airr.tsv"), sep = "\t",header = T, fill =T), stringsAsFactors = F)
+  controlBCells <- controlBCells[controlBCells$locus %in% c("IGH", "IGK", "IGL"),]
+  controlBCells_Heavy <- controlBCells[controlBCells$locus =="IGH",]
+```
+
+```{r}
+ totalMutFreq <- getMutationFreq(allContigs)
+```
+
+```{r}
+ # db_obsHeavy_control <- observedMutations(controlBCells_Heavy,
+ #                                sequenceColumn="v_sequence_alignment",
+ #                                germlineColumn="v_germline_alignment",
+ #                                regionDefinition=IMGT_V_BY_SEGMENTS,
+ #                                frequency=FALSE,
+ #                                nproc=1)
+ db_obsHeavy_control <- readRDS(paste0(dataDir,"/RDS_FILES/db_obsHeavy_control.rds"))
+```
+
+## 1-G
+
+```{r fig.width=3, fig.height=2}
+  tpDF <- totalMutFreq[,c("SAMPLETYPE", "V_heavy")]
+  tpDF_total <- tpDF
+  tpDF_total[,"SAMPLETYPE"] <- "Total"
+  tpDF <- rbind(tpDF, tpDF_total)
+  
+  cList = list(c("Control", "RBD"), c("Control", "2P"), c("RBD", "2P"), c("Control", "Total"))
+  
+  controlDF <- data.frame("SAMPLETYPE"="Control", "V_heavy" = (db_obsHeavy_control$mu_count_v_r + db_obsHeavy_control$mu_count_v_s))
+  tpDF <- rbind(tpDF, controlDF)
+  
+  tpDF$SAMPLETYPE <- factor(tpDF$SAMPLETYPE, levels = c("Total", "2P", "RBD", "Control"))
+  
+  tpDF <- tpDF[!is.na(tpDF$V_heavy),]
+  tpDF$V_heavy <- (tpDF$V_heavy+1)
+   
+  pdf(file = "./PDFFigures/Supplementary_Figure_1G.pdf", width = 7.5, height = 5) 
+  ggplot(data=tpDF, aes(x=SAMPLETYPE, y=V_heavy, fill=SAMPLETYPE)) +
+        geom_boxplot(position=position_dodge())+ylab("Value")+
+       xlab("")+ylab("Number of mutations \n in the heavy chain V segment")+
+     scale_y_continuous(trans = log2_trans(),
+     breaks = trans_breaks("log2", function(x) 2^x),
+     labels = trans_format("log2", math_format(2^.x)))+
+     stat_compare_means(method="t.test",
+                                  comparisons = cList,paired=F,
+                                  color="red",
+                                  aes(label = ..p.signif..))+
+     scale_fill_manual(values=rev(c("#E69F00","darkgreen", "#56B4E9", "red")))
+  dev.off()
+```
+
+## 1-H
+
+```{r}
+  tpDF <- totalMutFreq[,c("C_CALL_General", "V_heavy")]
+  
+  cList = list(c("IGHG", "IGHA"), c("IGHG", "IGHM"), c("IGHA", "IGHM"), c("IGHM", "IGHD"))
+  
+  
+  tpDF$C_CALL_General <- factor(tpDF$C_CALL_General, levels = c("IGHD", "IGHM", "IGHA", "IGHG"))
+  tpDF$V_heavy <- (tpDF$V_heavy+1)
+
+  pdf(file = "./PDFFigures/Supplementary_Figure_1H.pdf", width = 7.5, height = 5) 
+    ggplot(data=tpDF, aes(x=C_CALL_General, y=V_heavy, fill=C_CALL_General)) +
+        geom_boxplot(position=position_dodge())+ylab("Value")+
+       xlab("")+ylab("Number of mutations \n in the heavy chain V segment")+
+     scale_y_continuous(trans = log2_trans(),
+     breaks = trans_breaks("log2", function(x) 2^x),
+     labels = trans_format("log2", math_format(2^.x)))+
+     stat_compare_means(method="t.test",
+                                  comparisons = cList,paired=F,
+                                  color="red",
+                                  aes(label = ..p.signif..))+
+     scale_fill_manual(values=rev(c("blue","springgreen3", "plum4","pink")))
+  dev.off()
+```
+
+## 1-F
+
+```{r}
+  allContigs = combineAllClonesCOVID19(minNumCells = 0)
+  totalMutFreq <- getMutationFreq(allContigs)
+  rownames(totalMutFreq) <- totalMutFreq$CELL
+  totalMutFreq$DonorID_CLONE <- paste0(totalMutFreq$donorID,"_",totalMutFreq$CLONE)
+  totalMutFreq <- data.table(totalMutFreq)
+  totalMutFreq[,NumberOfClonalCells:=length(unique(CELL)),by=DonorID_CLONE]
+  
+  allRes <- data.frame()
+  totalMutFreqTempAll <- data.frame()
+  for(elem in unique(totalMutFreq$donorID)){
+    
+     
+     totalMutFreqTemp <- totalMutFreq[totalMutFreq$donorID == elem,]
+     totalMutFreqTemp$TotalNoCells <- sum(totalMutFreqTemp$NumberOfClonalCells)
+     totalMutFreqTemp[,totalIsotypeCells := sum(NumberOfClonalCells),by=C_CALL_General] 
+     totalMutFreqTemp[,meanIsotypeCells := mean(NumberOfClonalCells),by=C_CALL_General] 
+     
+     totalMutFreqTemp[,percentIsotypeCells := round(totalIsotypeCells / TotalNoCells, digits = 2),] 
+     
+     totalMutFreqTemp <- data.frame(totalMutFreqTemp)
+     totalMutFreqTemp <- unique(totalMutFreqTemp[,c("DonorID_CLONE","C_CALL_General", "NumberOfClonalCells","percentIsotypeCells","meanIsotypeCells", "V_heavy")])
+     
+     hehe <- unique(totalMutFreqTemp[,c("C_CALL_General", "percentIsotypeCells", "meanIsotypeCells")])
+     
+     hehe$C_CALL_General <- factor(hehe$C_CALL_General, levels = c("IGHD", "IGHM", "IGHA", "IGHG"))
+     hehe$donorID <- elem
+    
+     allRes <- rbind(allRes, hehe)
+     
+     totalMutFreqTemp$C_CALL_General <- factor(totalMutFreqTemp$C_CALL_General, levels = c("IGHD", "IGHM", "IGHA", "IGHG"))
+     totalMutFreqTemp$donorID = elem
+     
+     totalMutFreqTempAll <- rbind(totalMutFreqTempAll, totalMutFreqTemp)
+  }
+
+```
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=20, fig.height=15}
+  cList = list(c("IGHD", "IGHM"),  
+                c("IGHM","IGHA"), c("IGHM","IGHG"), c("IGHA","IGHG") )
+  totalMutFreqTempAll$donorID <- factor( totalMutFreqTempAll$donorID, 
+                                         levels = c("DON_1", "DON_2", "DON_4",  "DON_5",  "DON_6",  "DON_7",  "DON_9" ,
+                                                    "DON_10", "DON_13", "DON_14", "DON_18", "DON_19","DON_20", "DON_21" ))
+  totalMutFreqTempAll$percentIsotypeCells <- totalMutFreqTempAll$percentIsotypeCells * 100
+  
+  pdf(file = "./PDFFigures/Supplementary_Figure_1F.pdf", width = 25, height = 15) 
+    ggplot(data=totalMutFreqTempAll, aes(x=C_CALL_General, y=NumberOfClonalCells, fill=C_CALL_General)) +
+        geom_violin()+ylab("Value")+
+        geom_point(size=0.05)+geom_jitter()+
+        facet_wrap(~donorID, ncol = 5, scales = "free")+
+        xlab("")+ylab("Clone size")+
+        geom_text(data = totalMutFreqTempAll, aes(x=C_CALL_General,label=percentIsotypeCells, y=30 ), size=8)+
+        #stat_summary(fun.data = median_fun, geom = "text", size=5)+
+        stat_compare_means(method="t.test",
+                                    comparisons = cList,paired=F,
+                                    color="red",
+                                    aes(label = ..p.signif..), label.y = c(10,15,20,25))+
+       theme_bw()+
+       theme( legend.position = "None", axis.text = element_text(size=15), axis.title = element_text(size=15), strip.text = element_text(size=20))
+  dev.off()
+
+```
+
+## 1-I
+
+```{r fig.width=20, fig.height=10}
+pdf(file = "./PDFFigures/Supplementary_Figure_1I.pdf", width = 40, height = 18) 
+  ggplot(data=totalMutFreqTempAll, aes(x=NumberOfClonalCells , y= V_heavy, color=DonorID_CLONE)) +
+      geom_violin()+
+      geom_point()+
+      facet_grid(C_CALL_General~donorID,  scales = "free")+
+      xlab("Number of mutations in heavy chain V segment")+ylab("Number of mutations in heavy chain V segment")+xlab("Clone size")+
+      stat_cor(method = "pearson", color="black", label.y = 40,size=10, label.sep = "\n")+
+      theme_bw()+
+      theme( legend.position = "None", axis.text = element_text(size=25), axis.title = element_text(size=25), strip.text = element_text(size=30))
+dev.off()
+
+```
+
+```{r}
+
+```
+
